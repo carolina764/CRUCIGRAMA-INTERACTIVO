@@ -1,2 +1,421 @@
-﻿[InternetShortcut]
-URL=https://onedrive.live.com/redir.aspx?cid=3d2e429f5ac1dbbe&resid=e49ec2d5410748d1aeb5c1a8da53c910&CallerScenarioId=OneNote-Prod&CallerId=Sync-Windows
+import React, { useEffect, useState, useRef } from "react"; 
+
+ 
+
+/* Crucigrama Interactivo: Enfoques Japonés y Americano Single-file React component (src/App.jsx) ready to paste into a Create React App or similar. 
+
+ 
+
+Uses no external JS libraries (only browser APIs) 
+
+ 
+
+Generates QR using Google Chart API image (so it will point to the current page URL when hosted) 
+
+ 
+
+Includes a 5-minute timer, sounds (tic + end), modal "Buena suerte" and final score display 
+
+ 
+
+Background themed (inline SVG + CSS) with Japan / USA motifs 
+
+ 
+
+ 
+
+NOTES: 
+
+ 
+
+When you deploy the app (GitHub Pages / Netlify / Vercel), open the live URL and click "Ver QR" to get a printable QR that points to that live URL. 
+
+ 
+
+If you want me to generate a QR for a specific final URL, pásame la URL y yo te daré la imagen del QR lista para imprimir. */ 
+
+ 
+
+ 
+
+const GRID_SIZE = 15; 
+
+ 
+
+// Words with placements (solutions are stored here but not shown to users directly) const WORDS = [ { id: 1, word: "DEMING", row: 1, col: 1, dir: "across" }, { id: 2, word: "KAIZEN", row: 3, col: 1, dir: "across" }, { id: 3, word: "JIT", row: 5, col: 1, dir: "across" }, { id: 4, word: "ISHIKAWA", row: 7, col: 1, dir: "across" }, { id: 5, word: "CIRCULOS", row: 9, col: 1, dir: "across" }, { id: 6, word: "TAYLOR", row: 11, col: 1, dir: "across" }, { id: 7, word: "PRODUCTIVIDAD", row: 13, col: 1, dir: "across" }, 
+
+ 
+
+{ id: 8, word: "FAYOL", row: 1, col: 10, dir: "down" }, { id: 9, word: "DRUCKER", row: 1, col: 12, dir: "down" }, { id:10, word: "APO", row: 4, col: 12, dir: "down" }, { id:11, word: "MOTIVACION", row: 2, col: 7, dir: "down" }, { id:12, word: "EFICIENCIA", row: 4, col: 4, dir: "down" }, { id:13, word: "CALIDAD", row: 6, col: 9, dir: "down" }, { id:14, word: "INNOVACION", row: 8, col: 5, dir: "down" }, { id:15, word: "EQUIPO", row: 10, col: 3, dir: "down" }, ]; 
+
+ 
+
+function makeGrid() { const grid = Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => ({ letter: "", numbers: [], blocked: true })) ); 
+
+ 
+
+for (const w of WORDS) { const word = w.word.toUpperCase(); const r0 = w.row - 1; const c0 = w.col - 1; for (let i = 0; i < word.length; i++) { const r = w.dir === "across" ? r0 : r0 + i; const c = w.dir === "across" ? c0 + i : c0; grid[r][c].blocked = false; grid[r][c].letter = word[i]; if (i === 0) grid[r][c].numbers.push(w.id); } } 
+
+ 
+
+return grid; } 
+
+ 
+
+const SOLUTION_GRID = makeGrid(); 
+
+ 
+
+export default function App() { const [grid, setGrid] = useState(() => { // create a user grid with empty letters where not blocked return SOLUTION_GRID.map((row) => row.map((cell) => ({ ...cell, user: "" }))); }); 
+
+ 
+
+const [started, setStarted] = useState(false); const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds const timerRef = useRef(null); const ticRef = useRef(null); const [showBuenaSuerte, setShowBuenaSuerte] = useState(false); const [showQR, setShowQR] = useState(false); const [showResult, setShowResult] = useState(false); const [score, setScore] = useState({ correctWords: 0, totalWords: WORDS.length }); 
+
+ 
+
+useEffect(() => { if (started && timeLeft > 0) { timerRef.current = setTimeout(() => setTimeLeft((t) => t - 1), 1000); } if (!started) clearTimeout(timerRef.current); 
+
+ 
+
+// handle tic start at 20 seconds left 
+
+if (started && timeLeft <= 20 && timeLeft > 0) { 
+
+  // ensure tic sound plays every second 
+
+  if (!ticRef.current) ticRef.current = setInterval(() => playTic(), 1000); 
+
+} 
+
+if ((!started || timeLeft > 20) && ticRef.current) { 
+
+  clearInterval(ticRef.current); 
+
+  ticRef.current = null; 
+
+} 
+
+ 
+
+if (timeLeft === 0 && started) { 
+
+  endGame(); 
+
+} 
+
+ 
+
+return () => { 
+
+  // cleanup 
+
+}; 
+
+ 
+
+}, [started, timeLeft]); 
+
+ 
+
+function playTic() { // short click sound using WebAudio try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = "square"; o.frequency.value = 880; g.gain.value = 0.02; o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 90); } catch (e) { // audio not allowed } } 
+
+ 
+
+function playEndSound() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = "sine"; o.frequency.value = 440; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(() => { o.frequency.setValueAtTime(220, ctx.currentTime); }, 150); setTimeout(() => { o.stop(); ctx.close(); }, 700); } catch (e) {} } 
+
+ 
+
+function startGame() { // reset state and start setGrid(SOLUTION_GRID.map((row) => row.map((cell) => ({ ...cell, user: "" })))); setStarted(true); setTimeLeft(300); setShowBuenaSuerte(true); setShowResult(false); setScore({ correctWords: 0, totalWords: WORDS.length }); 
+
+ 
+
+// play a short start click 
+
+setTimeout(() => setShowBuenaSuerte(false), 2000); 
+
+ 
+
+} 
+
+ 
+
+function endGame() { setStarted(false); if (ticRef.current) { clearInterval(ticRef.current); ticRef.current = null; } playEndSound(); // compute score const correct = computeScore(); setScore({ correctWords: correct, totalWords: WORDS.length }); setShowResult(true); } 
+
+ 
+
+function computeScore() { // check each word if fully correct let correctWords = 0; for (const w of WORDS) { const word = w.word.toUpperCase(); const r0 = w.row - 1; const c0 = w.col - 1; let ok = true; for (let i = 0; i < word.length; i++) { const r = w.dir === "across" ? r0 : r0 + i; const c = w.dir === "across" ? c0 + i : c0; const userChar = grid[r][c].user || ""; if (userChar.toUpperCase() !== word[i].toUpperCase()) { ok = false; break; } } if (ok) correctWords++; } return correctWords; } 
+
+ 
+
+function handleInput(r, c, val) { val = val.toUpperCase().replace(/[^A-ZÑÁÉÍÓÚÜ]/g, ""); if (val.length > 1) val = val[val.length - 1]; setGrid((g) => { const copy = g.map((row) => row.map((cell) => ({ ...cell }))); copy[r][c].user = val; return copy; }); } 
+
+ 
+
+function handleCheck() { const correct = computeScore(); setScore({ correctWords: correct, totalWords: WORDS.length }); setShowResult(true); } 
+
+ 
+
+function handleReset() { if (timerRef.current) clearTimeout(timerRef.current); if (ticRef.current) { clearInterval(ticRef.current); ticRef.current = null; } setGrid(SOLUTION_GRID.map((row) => row.map((cell) => ({ ...cell, user: "" })))); setStarted(false); setTimeLeft(300); setShowResult(false); setScore({ correctWords: 0, totalWords: WORDS.length }); } 
+
+ 
+
+function formatTime(s) { const mm = String(Math.floor(s / 60)).padStart(2, "0"); const ss = String(s % 60).padStart(2, "0"); return ${mm}:${ss}; } 
+
+ 
+
+function getQRUrl() { // Use current location as destination. When deployed this will be the public URL. const url = window.location.href; return https://chart.googleapis.com/chart?chs=400x400&cht=qr&chl=${encodeURIComponent(url)}&choe=UTF-8; } 
+
+ 
+
+return ( <div style={styles.page}> <div style={styles.overlay} /> <div style={styles.container}> <header style={styles.header}> <h1 style={styles.title}>Crucigrama Interactivo: Enfoques Japonés y Americano</h1> <div style={styles.controlsTop}> <div style={{ display: "flex", gap: 8, alignItems: "center" }}> <button style={styles.primaryBtn} onClick={startGame}>Iniciar crucigrama</button> <button style={styles.secondaryBtn} onClick={handleCheck}>Revisar respuestas</button> <button style={styles.ghostBtn} onClick={handleReset}>Reiniciar</button> <button style={styles.ghostBtn} onClick={() => setShowQR(true)}>Ver QR</button> <button style={styles.ghostBtn} onClick={() => window.print()}>Imprimir</button> </div> <div style={{ marginLeft: 16 }}> <div style={{...styles.timer, color: timeLeft<=20 ? '#c53030' : '#073b4c'}}>{formatTime(timeLeft)}</div> </div> </div> </header> 
+
+ 
+
+<main style={styles.main}> 
+
+      <section style={styles.crosswordSection}> 
+
+        <div style={styles.boardWrapper}> 
+
+          <div style={styles.grid}> 
+
+            {grid.map((row, r) => ( 
+
+              <div key={r} style={styles.row}> 
+
+                {row.map((cell, c) => ( 
+
+                  <div key={c} style={cell.blocked ? styles.cellBlocked : styles.cell}> 
+
+                    {!cell.blocked && ( 
+
+                      <> 
+
+                        {cell.numbers.length > 0 && ( 
+
+                          <div style={styles.cellNumber}>{cell.numbers.join(",")}</div> 
+
+                        )} 
+
+                        <input 
+
+                          maxLength={1} 
+
+                          value={cell.user} 
+
+                          onChange={(e) => handleInput(r, c, e.target.value)} 
+
+                          style={styles.cellInput} 
+
+                          disabled={!started && !showResult} 
+
+                          aria-label={Celda ${r + 1}-${c + 1}} 
+
+                        /> 
+
+                      </> 
+
+                    )} 
+
+                  </div> 
+
+                ))} 
+
+              </div> 
+
+            ))} 
+
+          </div> 
+
+ 
+
+          <div style={styles.boardButtonsRow}> 
+
+            <div style={{ fontSize: 14, color: '#475569' }}>Números en tablero corresponden a los conceptos de abajo.</div> 
+
+          </div> 
+
+        </div> 
+
+      </section> 
+
+ 
+
+      <aside style={styles.hintsSection}> 
+
+        <h2 style={{ marginTop: 0 }}>Pistas / Conceptos</h2> 
+
+        <div style={styles.hintColumns}> 
+
+          <div> 
+
+            <h3 style={styles.hintHeader}>Horizontales</h3> 
+
+            <ol> 
+
+              <li>Estadístico que enseñó a Japón el control de calidad.</li> 
+
+              <li>Filosofía japonesa de mejora continua.</li> 
+
+              <li>Sistema japonés de producción “Justo a Tiempo”.</li> 
+
+              <li>Creador del diagrama causa-efecto o “espina de pescado”.</li> 
+
+              <li>Grupos de trabajadores que se reúnen para resolver problemas.</li> 
+
+              <li>Padre de la administración científica.</li> 
+
+              <li>Relación entre lo producido y los recursos usados.</li> 
+
+            </ol> 
+
+          </div> 
+
+ 
+
+          <div> 
+
+            <h3 style={styles.hintHeader}>Verticales</h3> 
+
+            <ol> 
+
+              <li>Autor de los 14 principios administrativos.</li> 
+
+              <li>Padre de la administración moderna.</li> 
+
+              <li>Siglas de Administración por Objetivos.</li> 
+
+              <li>Factor humano que impulsa al trabajador a rendir mejor.</li> 
+
+              <li>Capacidad para lograr resultados con el menor recurso posible.</li> 
+
+              <li>Enfoque que busca mejorar todos los procesos de la empresa.</li> 
+
+              <li>Crear o mejorar productos, procesos o servicios.</li> 
+
+              <li>Colaboración de empleados para lograr un objetivo.</li> 
+
+            </ol> 
+
+          </div> 
+
+        </div> 
+
+ 
+
+        <div style={{ marginTop: 16, fontSize: 13, color: '#334155' }}> 
+
+          Consejos: Cuando encuentres una respuesta, escribe letra por letra en el tablero. Puedes revisar tus respuestas con el botón "Revisar respuestas". El temporizador inicia al pulsar "Iniciar crucigrama". 
+
+        </div> 
+
+      </aside> 
+
+    </main> 
+
+ 
+
+    <footer style={styles.footer}> 
+
+      <div>Diseñado para aprendizaje — Colores: rojo, azul marino y gris. </div> 
+
+    </footer> 
+
+ 
+
+    {/* Buena suerte modal */} 
+
+    {showBuenaSuerte && ( 
+
+      <div style={styles.modal}>  
+
+        <div style={styles.modalContent}> 
+
+          <h2>🎯 ¡Buena suerte!</h2> 
+
+          <p>Tu tiempo ha comenzado. Tienes 5 minutos. ¡Ánimo!</p> 
+
+        </div> 
+
+      </div> 
+
+    )} 
+
+ 
+
+    {/* QR modal */} 
+
+    {showQR && ( 
+
+      <div style={styles.modal} onClick={() => setShowQR(false)}> 
+
+        <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}> 
+
+          <h3>📲 Escanea para resolver el crucigrama</h3> 
+
+          <img alt="QR" src={getQRUrl()} style={{ width: 260, height: 260 }} /> 
+
+          <div style={{ marginTop: 8 }}> 
+
+            <a href={getQRUrl()} target="_blank" rel="noreferrer" download="crucigrama-qr.png"> 
+
+              <button style={styles.primaryBtn}>Descargar QR</button> 
+
+            </a> 
+
+            <button style={{ ...styles.ghostBtn, marginLeft: 8 }} onClick={() => setShowQR(false)}>Cerrar</button> 
+
+          </div> 
+
+        </div> 
+
+      </div> 
+
+    )} 
+
+ 
+
+    {/* Result modal */} 
+
+    {showResult && ( 
+
+      <div style={styles.modal}> 
+
+        <div style={styles.modalContent}> 
+
+          <h2>Resultados</h2> 
+
+          <p>Obtuviste <strong>{score.correctWords}</strong> respuestas correctas de <strong>{score.totalWords}</strong>.</p> 
+
+          <div style={{ marginTop: 12 }}> 
+
+            <button style={styles.primaryBtn} onClick={() => setShowResult(false)}>Aceptar</button> 
+
+            <button style={{ ...styles.ghostBtn, marginLeft: 8 }} onClick={() => { setShowResult(false); handleReset(); }}>Reiniciar</button> 
+
+          </div> 
+
+        </div> 
+
+      </div> 
+
+    )} 
+
+ 
+
+  </div> 
+
+</div> 
+
+ 
+
+); } 
+
+ 
+
+const styles = { page: { minHeight: '100vh', fontFamily: 'Inter, Poppins, system-ui, sans-serif', position: 'relative', background: 'linear-gradient(90deg, rgba(220,38,38,0.06) 0%, rgba(255,255,255,0.6) 50%, rgba(15,23,42,0.05) 100%)', padding: 24, }, overlay: { position: 'absolute', inset: 0, backgroundImage: url('data:image/svg+xml;utf8,${encodeURIComponent(svgBackground())}'), backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12, pointerEvents: 'none' }, container: { position: 'relative', maxWidth: 1100, margin: '0 auto', background: 'rgba(255,255,255,0.9)', borderRadius: 16, padding: 18, boxShadow: '0 6px 30px rgba(2,6,23,0.08)' }, header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, title: { fontSize: 20, margin: 0, color: '#0f172a' }, controlsTop: { display: 'flex', alignItems: 'center' }, primaryBtn: { background: '#0f172a', color: '#fff', padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer' }, secondaryBtn: { background: '#c0262e', color: '#fff', padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer' }, ghostBtn: { background: '#e6eef8', color: '#0f172a', padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer' }, timer: { fontSize: 18, fontWeight: 600, background: '#fff', padding: '6px 10px', borderRadius: 8, border: '1px solid #d1d5db' }, main: { display: 'flex', gap: 18, alignItems: 'flex-start' }, crosswordSection: { flex: 2 }, hintsSection: { flex: 1, background: '#ffffff', padding: 12, borderRadius: 12, border: '1px solid #e6eef8' }, boardWrapper: { padding: 12, background: '#fbfdff', borderRadius: 12, boxShadow: 'inset 0 1px 0 rgba(2,6,23,0.02)' }, grid: { display: 'grid', gridTemplateRows: repeat(${GRID_SIZE}, 34px), gap: 2, background: '#fff' }, row: { display: 'grid', gridTemplateColumns: repeat(${GRID_SIZE}, 34px), gap: 2 }, cell: { width: 34, height: 34, background: '#fff', border: '1px solid #e2e8f0', position: 'relative', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }, cellBlocked: { width: 34, height: 34, background: '#e2e8f0', borderRadius: 6 }, cellInput: { width: '100%', height: '100%', border: 'none', textAlign: 'center', fontSize: 14, fontWeight: 700, background: 'transparent', outline: 'none' }, cellNumber: { position: 'absolute', top: 2, left: 4, fontSize: 9, color: '#475569' }, boardButtonsRow: { marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }, hintColumns: { display: 'flex', gap: 12, justifyContent: 'space-between' }, hintHeader: { margin: '6px 0' }, footer: { marginTop: 12, color: '#475569', fontSize: 13 }, modal: { position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(2,6,23,0.5)', zIndex: 60 }, modalContent: { background: '#fff', padding: 18, borderRadius: 12, minWidth: 320, textAlign: 'center' } }; 
+
+ 
+
+function svgBackground() { // Inline simple SVG combining Mt Fuji and skyline motifs for a subtle background return <svg xmlns='http://www.w3.org/2000/svg' width='1600' height='800'> <defs> <linearGradient id='g1' x1='0' x2='1'> <stop offset='0' stop-color='%23dc2626' stop-opacity='1'/> <stop offset='0.5' stop-color='%23ffffff' stop-opacity='1'/> <stop offset='1' stop-color='%230f172a' stop-opacity='1'/> </linearGradient> </defs> <rect width='100%' height='100%' fill='url(#g1)' opacity='0.15'/> <!-- Mount Fuji style --> <g transform='translate(100,420)'> <path d='M0 200 L160 40 L320 200 Z' fill='%23ffffff' opacity='0.9'/> <path d='M120 60 Q160 20 200 60 L160 80 Z' fill='%23dc2626' opacity='0.9'/> </g> <!-- Skyline right --> <g transform='translate(1000,360)' fill='%230b1220' opacity='0.14'> <rect x='0' y='40' width='28' height='160'/> <rect x='36' y='0' width='40' height='200'/> <rect x='84' y='80' width='24' height='120'/> <rect x='114' y='20' width='56' height='180'/> <rect x='180' y='60' width='30' height='140'/> </g> <!-- Flags subtle --> <g transform='translate(40,40)'> <circle cx='30' cy='30' r='18' fill='%23ffffff' stroke='%23dc2626' stroke-width='6' opacity='0.75'/> </g> <g transform='translate(1460,40)'> <rect x='0' y='0' width='60' height='36' fill='%230b1220' opacity='0.75'/> </g> </svg>; } 
