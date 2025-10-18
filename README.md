@@ -1,2 +1,2 @@
 # CRUCIGRAMA-INTERACTIVO
-Divierte poniendo a prueba tu conocimiento 
+Diviertete poniendo a prueba tu conocimiento 
